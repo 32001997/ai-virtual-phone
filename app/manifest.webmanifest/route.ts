@@ -19,11 +19,13 @@ export function GET(request: NextRequest) {
   const isEdge = /Edg/i.test(ua);
   const preference = readPwaDisplayPreference(request.headers.get("cookie") || "");
 
+  // 「fullscreen」偏好已按 standalone 下发：display-mode: fullscreen 同样会触发
+  // Chrome/Opera 无法抑制的「如需退出全屏模式」提示条，故不再提供全屏安装模式。
   const manifest = preference === "fullscreen"
     ? {
         ...baseManifest,
-        display: "fullscreen",
-        display_override: ["fullscreen", "standalone"],
+        display: "standalone",
+        display_override: ["standalone"],
       }
     : preference === "standalone"
       ? {

@@ -15,7 +15,6 @@ import { hydrateKvDb, isKvHydrated } from "@/lib/kv-db";
 import { getThemeAssetMap, readThemeProfile } from "@/lib/theme-storage";
 import { resolveActiveIconSkins, type ThemeProfile } from "@/lib/theme-types";
 import { hasPendingMcpOAuthCallback } from "@/lib/tool-executor";
-import { shouldRequestPwaFullscreen } from "@/lib/pwa-display-mode";
 
 const TEXT = {
   loading: "\u52A0\u8F7D\u4E2D...",
@@ -266,22 +265,10 @@ export function MainApp() {
       }
     })();
 
-    // 安卓全屏兜底。是否请求全屏在每次点击时读取，设置切换后无需重载。
-    const isMobile = window.matchMedia("(max-width: 500px) and (hover: none) and (pointer: coarse)").matches;
-    if (!isMobile) return () => {
-      cancelled = true;
-    };
-
-    function tryFullscreen() {
-      if (!shouldRequestPwaFullscreen()) return;
-      const doc = document.documentElement;
-      if (document.fullscreenElement) return;
-      doc.requestFullscreen?.().catch(() => { });
-    }
-    document.addEventListener("click", tryFullscreen);
+    // 不再调用全屏 API：浏览器（Chrome/Opera 等）每次因网页 API 进入全屏都会弹出
+    // 「如需退出全屏模式」提示条且无法抑制。沉浸感交给 PWA standalone 安装模式。
     return () => {
       cancelled = true;
-      document.removeEventListener("click", tryFullscreen);
     };
   }, [initAttempt]);
 
