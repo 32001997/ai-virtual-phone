@@ -534,6 +534,60 @@ export function reindexSessionMessageOrdersByTime(sessionId: string): void {
     }
 }
 
+/**
+ * 数据层版「按时间重排」：绕过内存缓存，直接读写 IndexedDB。
+ * 供合并导入结束后调用——两份备份的消息 order 各自从 0 起，导入后
+ * 直接按 order 显示会成块错乱；这里把每个会话的消息按 createdAt 升序
+ * （同刻按 id 字典序，与 reindexSessionMessageOrdersByTime 完全一致）
+ * 重写 order，并同步刷新会话末条预览。返回被改写的消息条数。
+ */
+export async function reindexStoredChatOrdersByTime(): Promise<number> {
+    if (typeof window === "undefined") return 0;
+    const [messages, sessions] = await Promise.all([
+        chatDb.messages.toArray(),
+        chatDb.sessions.toArray(),
+    ]);
+
+    const bySession = new Map<string, ChatMessage[]>();
+    for (const message of messages) {
+        const list = bySession.get(message.sessionId);
+        if (list) list.push(message);
+        else bySession.set(message.sessionId, [message]);
+    }
+
+    const changedMessages: ChatMessage[] = [];
+    const changedSessions: ChatSession[] = [];
+    for (const [sessionId, msgs] of bySession) {
+        const ordered = [...msgs].sort((a, b) => {
+            const timeDiff = getMessageTimeValue(a) - getMessageTimeValue(b);
+            if (timeDiff !== 0) return timeDiff;
+            return a.id.localeCompare(b.id);
+        });
+        ordered.forEach((msg, index) => {
+            if (msg.order !== index) changedMessages.push({ ...msg, order: index });
+        });
+
+        const lastMsg = [...ordered].reverse().find(isSessionPreviewCandidate);
+        const session = sessions.find(s => s.id === sessionId);
+        if (!session || !lastMsg) continue;
+        if (
+            session.lastMessageId === lastMsg.id
+            && (session.lastMessagePreview || "") === getChatMessagePreview(lastMsg)
+            && session.updatedAt === lastMsg.createdAt
+        ) continue;
+        changedSessions.push({
+            ...session,
+            lastMessageId: lastMsg.id,
+            lastMessagePreview: getChatMessagePreview(lastMsg),
+            updatedAt: lastMsg.createdAt,
+        });
+    }
+
+    if (changedMessages.length > 0) await chatDb.messages.bulkPut(changedMessages);
+    if (changedSessions.length > 0) await chatDb.sessions.bulkPut(changedSessions);
+    return changedMessages.length;
+}
+
 export function getLastVisibleSessionMessage(sessionId: string): ChatMessage | null {
     const messages = getSortedSessionMessages(sessionId);
     for (let i = messages.length - 1; i >= 0; i -= 1) {

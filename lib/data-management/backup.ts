@@ -3,6 +3,7 @@ import { downloadFile, type DownloadFileOptions } from "../download-utils";
 import { sha256BlobHex } from "../sha256-stream";
 import { CLOUD_CREDENTIAL_KV_KEYS, DATA_MODULES } from "./modules";
 import { clearSource, exportSource, importSource, inspectSource } from "./idb";
+import { reindexStoredChatOrdersByTime } from "../chat-storage";
 import { createMediaCollector, estimateValueBytes, utf8Bytes, type MediaCollector, type MediaResolver } from "./serializers";
 import type {
   BackupEnvelope,
@@ -504,6 +505,8 @@ export async function importBackupBlob(blob: Blob, moduleIds?: DataModuleId[], o
 
   const selected = moduleIds && moduleIds.length > 0 ? new Set(moduleIds) : null;
   const total: ImportResult = { added: 0, skipped: 0, overwritten: 0, errors: [] };
+  // 合并导入聊天模块后需要按时间戳重排消息 order（见循环后的调用）。
+  let chatDbMerged = false;
 
   // Pull each media binary straight from the zip, one at a time (low peak memory).
   // v1 backups have no media/ entries — markers there are inline base64, resolver is never hit.
@@ -536,6 +539,9 @@ export async function importBackupBlob(blob: Blob, moduleIds?: DataModuleId[], o
     }
     if (selected && !selected.has(modulePayload.moduleId)) continue;
     for (const sourcePayload of modulePayload.sources) {
+      if (!options.overwrite && sourcePayload.type === "indexeddb" && sourcePayload.dbName === "AiPhoneChatDB") {
+        chatDbMerged = true;
+      }
       const result = await importSource(sourcePayload, Boolean(options.overwrite), resolver);
       total.added += result.added;
       total.skipped += result.skipped;
@@ -546,6 +552,16 @@ export async function importBackupBlob(blob: Blob, moduleIds?: DataModuleId[], o
 
   if (invalidMedia.size > 0) {
     total.errors.push(`${invalidMedia.size} 个媒体对象缺失或损坏，部分图片/文件可能丢失`);
+  }
+
+  if (chatDbMerged) {
+    // 两份备份的消息 order 各自从 0 起，混在一起按 order 显示会成块错乱。
+    // 合并落库后统一按时间戳重写 order，重启后气泡即严格按时间排列。
+    try {
+      await reindexStoredChatOrdersByTime();
+    } catch (error) {
+      total.errors.push(`按时间重排消息序号失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   return total;
