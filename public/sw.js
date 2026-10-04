@@ -1,4 +1,4 @@
-const CACHE_VERSION = "ai-phone-pwa-v13"; // v13: 强制清空旧部署缓存, 确保所有设备加载最新修复版
+const CACHE_VERSION = "ai-phone-pwa-v12";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 

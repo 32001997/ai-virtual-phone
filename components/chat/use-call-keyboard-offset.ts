@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { isMobileShell } from "@/lib/mobile-shell";
 
 // iOS 收起键盘的部分路径（切后台回来、字典收起、工具栏变化等）不会触发
 // visualViewport resize，偏移会永远卡在键盘高度上，整个通话界面停在上移
@@ -22,7 +21,8 @@ export function useCallKeyboardOffsetStyle(): CSSProperties {
         if (typeof window === "undefined") return;
 
         const isAndroidMobile =
-            /Android/i.test(navigator.userAgent) && isMobileShell();
+            /Android/i.test(navigator.userAgent) &&
+            window.matchMedia("(max-width: 500px) and (hover: none) and (pointer: coarse)").matches;
 
         if (isAndroidMobile) {
             setOffset(0);
