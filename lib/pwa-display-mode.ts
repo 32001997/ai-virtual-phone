@@ -1,4 +1,8 @@
-export type PwaDisplayPreference = "fullscreen" | "standalone";
+import { shellChannel } from "./mobile-shell";
+
+/** fullscreen=沉浸全屏 / browser=标准（不强制全屏，保留应用状态栏）/ standalone=显示系统状态栏。
+ *  未设置时走渠道默认（见 shouldRequestPwaFullscreen）。 */
+export type PwaDisplayPreference = "fullscreen" | "browser" | "standalone";
 export type RuntimePwaDisplayMode = "fullscreen" | "standalone" | "minimal-ui" | "browser";
 export type PwaHostedSurface = "custom-app" | "game";
 
@@ -40,7 +44,7 @@ export function readPwaDisplayPreference(cookie: string): PwaDisplayPreference |
   const match = cookie.match(new RegExp(`(?:^|;\\s*)${PWA_DISPLAY_MODE_COOKIE}=([^;]+)`));
   if (!match) return null;
   const value = decodeCookieValue(match[1]);
-  return value === "fullscreen" || value === "standalone" ? value : null;
+  return value === "fullscreen" || value === "browser" || value === "standalone" ? value : null;
 }
 
 export function writePwaDisplayPreference(preference: PwaDisplayPreference) {
@@ -49,12 +53,16 @@ export function writePwaDisplayPreference(preference: PwaDisplayPreference) {
   window.dispatchEvent(new CustomEvent(PWA_DISPLAY_MODE_CHANGED_EVENT, { detail: preference }));
 }
 
-/** Preserve the upstream default: mobile browsers request fullscreen unless Edge or explicitly disabled. */
+/** 是否请求沉浸全屏。优先级：用户显式偏好 > 渠道默认。
+ *  beta 渠道（测试站）没动过偏好时不强制全屏——延续测试线既有行为；
+ *  想要沉浸的测试用户把「显示系统状态栏」开关拨开再拨回即可（写入显式 fullscreen）。
+ *  stable 渠道保持主线默认：除 Edge 外点击即请求全屏。 */
 export function shouldRequestPwaFullscreen(): boolean {
   if (typeof document === "undefined" || typeof navigator === "undefined") return false;
   const preference = readPwaDisplayPreference(document.cookie);
-  if (preference === "standalone") return false;
+  if (preference === "standalone" || preference === "browser") return false;
   if (preference === "fullscreen") return true;
+  if (shellChannel() === "beta") return false;
   return !/Edg/i.test(navigator.userAgent);
 }
 

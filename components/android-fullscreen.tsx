@@ -1,10 +1,34 @@
 "use client";
 
+import { useEffect } from "react";
+import { isMobileShell } from "@/lib/mobile-shell";
+import { shouldRequestPwaFullscreen } from "@/lib/pwa-display-mode";
+
+
 /**
- * 安卓全屏兜底（已停用）：网页调用全屏 API 会触发浏览器无法抑制的
- * 「如需退出全屏模式」提示条（Chrome/Opera 等）。沉浸感改由 PWA
- * standalone 安装模式提供，此组件保留空实现以兼容既有挂载点。
+ * 安卓全屏兜底：点击屏幕进入全屏模式（iOS 不支持此 API，会自动忽略）。
+ *
+ * world-builder（筑境）通过 window.open 开在独立窗口，不在 main-app 的 React 树内，
+ * 因此拿不到 main-app 里那段「点击进全屏」的监听，会一直露出浏览器地址栏。
+ * 这个组件把同一套逻辑复刻到 world-builder 窗口，挂上即可。
  */
 export function AndroidFullscreen() {
+  useEffect(() => {
+    const isMobile = isMobileShell();
+    if (!isMobile) return;
+
+    function tryFullscreen() {
+      if (!shouldRequestPwaFullscreen()) return;
+      const doc = document.documentElement;
+      if (document.fullscreenElement) return;
+      doc.requestFullscreen?.().catch(() => { });
+    }
+    // 每次点击都尝试进入全屏（退出后可重新进入）；渠道默认与用户偏好由 shouldRequestPwaFullscreen 统一裁决
+    document.addEventListener("click", tryFullscreen);
+    return () => {
+      document.removeEventListener("click", tryFullscreen);
+    };
+  }, []);
+
   return null;
 }
