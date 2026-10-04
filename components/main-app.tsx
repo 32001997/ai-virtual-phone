@@ -14,7 +14,7 @@ import { MusicProvider } from "@/lib/music-context";
 import { hydrateKvDb, isKvHydrated } from "@/lib/kv-db";
 import { getThemeAssetMap, readThemeProfile } from "@/lib/theme-storage";
 import { resolveActiveIconSkins, type ThemeProfile } from "@/lib/theme-types";
-import { applyShellZoom, isMobileShell } from "@/lib/mobile-shell";
+import { applyShellZoom, isMobileShell, readShellModeOverride, writeShellModeOverride } from "@/lib/mobile-shell";
 import { hasPendingMcpOAuthCallback } from "@/lib/tool-executor";
 import { shouldRequestPwaFullscreen } from "@/lib/pwa-display-mode";
 
@@ -237,6 +237,11 @@ export function MainApp() {
   useEffect(() => {
     let cancelled = false;
 
+    // 显示形态（手机壳强制标记 + 缩放）：挂载后立即应用。此前由 layout 的 head 内联脚本
+    // 在水合前执行，但 React 19 会因 <html> 属性与 SSR 输出不一致抛水合错误(#418)并
+    // 整树重挂载，聊天发送链路因此可能静默失效。启动画面本来就遮着屏幕，挂载后
+    // 再应用没有可见闪烁。
+    writeShellModeOverride(readShellModeOverride());
     // 申请持久化存储：批准后 iOS/安卓不会再因存储压力擅自回收 IndexedDB
     // （摊主钥匙、聊天记录等都存在里面）。静默尽力而为，被拒也无碍。
     void navigator.storage?.persist?.().catch(() => {});
@@ -308,7 +313,7 @@ export function MainApp() {
     );
   }
 
-  // 大屏档整屏缩放：首帧由 layout.tsx 内联脚本算好，这里只负责旋转/分屏后重算。
+  // 大屏档整屏缩放：首帧由上方启动 effect 应用，这里只负责旋转/分屏后重算。
   // 只在宽度变化时重算——键盘弹出只改高度，打字过程中缩放不能跳。
   useEffect(() => {
     if (typeof window === "undefined") return;
