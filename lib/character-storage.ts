@@ -59,8 +59,14 @@ export function loadCharacters(): Character[] {
         else delete char.timeZone;
         needsSave = true;
       }
-      // Sanitize avatars: only keep data-URLs and http(s) URLs
-      if (char.avatar && !char.avatar.startsWith("data:") && !char.avatar.startsWith("http://") && !char.avatar.startsWith("https://")) {
+      // Sanitize avatars: only keep data-URLs and http(s) URLs.
+      // v2备份导入会把头像还原成Blob对象——先按类型分流，非字符串头像置空；
+      // 否则对对象调用startsWith会抛TypeError，被外层catch吞掉后loadCharacters
+      // 整体返回空数组，所有聊天都会"Character not found"发送失败。
+      if (char.avatar && typeof char.avatar !== "string") {
+        char.avatar = null;
+        needsSave = true;
+      } else if (char.avatar && !char.avatar.startsWith("data:") && !char.avatar.startsWith("http://") && !char.avatar.startsWith("https://")) {
         char.avatar = null;
         needsSave = true;
       }
