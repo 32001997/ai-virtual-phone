@@ -29,7 +29,7 @@ export default function RootLayout({
   children: ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" suppressHydrationWarning>
       <head>
         {/* 物理手机检测：浏览器谎报视口（桌面版网站/私有缩放/显示大小调小）时，
             按物理屏幕+触摸点强制手机布局。同步执行避免首屏闪桌面壳。
